@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — DrClawLights{% endblock %}
+{% block content %}
+<h1 class="page-title">Dashboard</h1>
+<p class="page-subtitle">Configure your daily highlights digest.</p>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>Settings</h2>
+      <p class="hint">Saved to the service. Schedule changes take effect immediately.</p>
+      <form hx-post="/settings" hx-target="#toast" hx-swap="afterbegin">
+        <div class="field">
+          <label for="from_email">Sender address <span class="sub">(must be verified in Resend)</span></label>
+          <input type="email" id="from_email" name="from_email" value="{{ settings.from_email }}" placeholder="highlights@yourdomain.com">
+        </div>
+        <div class="field">
+          <label for="recipient_email">Recipient address</label>
+          <input type="email" id="recipient_email" name="recipient_email" value="{{ settings.recipient_email }}" placeholder="you@example.com">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="books_per_email">Books per email</label>
+            <input type="number" id="books_per_email" name="books_per_email" min="1" max="10" value="{{ settings.books_per_email }}">
+          </div>
+          <div class="field">
+            <label for="highlights_per_book">Highlights per book</label>
+            <input type="number" id="highlights_per_book" name="highlights_per_book" min="1" max="20" value="{{ settings.highlights_per_book }}">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="send_time">Send time</label>
+            <input type="time" id="send_time" name="send_time" value="{{ '%02d:%02d'|format(settings.send_hour, settings.send_minute) }}">
+          </div>
+          <div class="field">
+            <label for="timezone">Timezone</label>
+            <input type="text" id="timezone" name="timezone" list="tz-list" value="{{ settings.timezone }}">
+            <datalist id="tz-list">
+              {% for tz in timezones %}<option value="{{ tz }}">{% endfor %}
+            </datalist>
+          </div>
+        </div>
+        <button type="submit" class="btn">Save settings</button>
+      </form>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Schedule</h2>
+      <p class="hint">
+        Next digest: <strong id="next-run">{{ next_run }}</strong><br>
+        Last scheduled run: {{ last_run }}
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Highlights file</h2>
+      <p class="hint">Upload an updated <code>highlights.json</code> from HighlightsGrabber. Replaces the current file immediately.</p>
+      <form class="upload" hx-post="/upload" hx-target="#toast" hx-swap="afterbegin" hx-encoding="multipart/form-data">
+        <input type="file" name="file" accept="application/json,.json" required>
+        <button type="submit" class="btn secondary">Upload highlights</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Send a test digest</h2>
+      <p class="hint">Builds and sends one digest right now using the current settings and highlights — handy after an upload.</p>
+      <button class="btn" hx-post="/send-now" hx-target="#toast" hx-swap="afterbegin"
+              hx-disabled-elt="this" hx-indicator="this">Send now</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

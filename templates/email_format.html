@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Email Format — DrClawLights{% endblock %}
+{% block content %}
+<h1 class="page-title">Email Format</h1>
+<p class="page-subtitle">Style and structure of the daily digest email.</p>
+
+<div class="grid">
+  <div>
+    <div class="card">
+      <h2>Design file</h2>
+      <p class="hint">
+        The email's colours and fonts come from this <code>design.md</code>.
+        {% if design_present %}Current file: <strong>{{ design_name }}</strong>.{% else %}No design file yet — defaults are in use.{% endif %}
+      </p>
+      <form class="upload" hx-post="/email-format/design" hx-target="#toast" hx-swap="afterbegin" hx-encoding="multipart/form-data">
+        <input type="file" name="file" accept=".md,text/markdown,text/plain" required>
+        <button type="submit" class="btn secondary">Upload design</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Sections</h2>
+      <p class="hint">Turn optional parts of the email on or off. Saves automatically.</p>
+      <form hx-post="/email-format/toggles" hx-trigger="change" hx-target="#toast" hx-swap="afterbegin">
+        <div class="toggle-row">
+          <span class="label">Echo
+            <span class="sub">AI-found connection between two books (needs Anthropic key)</span>
+          </span>
+          <label class="switch">
+            <input type="checkbox" name="show_echo" {% if settings.show_echo %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span class="label">Revisit
+            <span class="sub">A highlight you haven't seen in a while</span>
+          </span>
+          <label class="switch">
+            <input type="checkbox" name="show_revisit" {% if settings.show_revisit %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-row">
+          <span class="label">Book covers
+            <span class="sub">Show cover images next to each book</span>
+          </span>
+          <label class="switch">
+            <input type="checkbox" name="show_covers" {% if settings.show_covers %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Subject line</h2>
+      <p class="hint">
+        Placeholders: <code>{book1}</code>, <code>{book2}</code>, <code>{book_list}</code>, <code>{count}</code>.
+      </p>
+      <form hx-post="/email-format/subject" hx-target="#toast" hx-swap="afterbegin">
+        <div class="field">
+          <input type="text" name="subject_template" value="{{ settings.subject_template }}">
+        </div>
+        <button type="submit" class="btn">Save subject</button>
+        <div id="subject-preview" class="preview-line">Subject preview: <strong>{{ subject_preview }}</strong></div>
+      </form>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Live preview</h2>
+      <p class="hint">A representative render using your current highlights and settings.</p>
+      <iframe id="email-preview" class="preview-frame" src="/email-format/preview" title="Email preview"
+              sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>
+</div>
+{% endblock %}

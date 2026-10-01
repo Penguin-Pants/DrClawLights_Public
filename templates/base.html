@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DrClawLights{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+</head>
+<body>
+  <nav class="nav">
+    <span class="wordmark">Dr. Clawlights</span>
+    <div class="nav-links">
+      <a href="/" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="/email-format" class="{% if active == 'email_format' %}active{% endif %}">Email Format</a>
+    </div>
+    <span class="spacer"></span>
+    <form action="/logout" method="post">
+      <button type="submit" class="btn ghost">Log out</button>
+    </form>
+  </nav>
+
+  <div class="toast-zone" id="toast"></div>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Reload the email preview iframe when the server asks us to.
+    document.body.addEventListener("refreshPreview", function () {
+      var frame = document.getElementById("email-preview");
+      if (frame) { frame.contentWindow.location.reload(); }
+    });
+    // Auto-dismiss toasts after a few seconds.
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      if (e.detail.target && e.detail.target.id === "toast") {
+        setTimeout(function () {
+          var first = document.querySelector("#toast .flash");
+          if (first) { first.remove(); }
+        }, 4000);
+      }
+    });
+  </script>
+</body>
+</html>
