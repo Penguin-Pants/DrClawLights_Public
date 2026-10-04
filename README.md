@@ -27,7 +27,11 @@
 - **Highlights file**: upload the JSON file exported by HighlightsGrabber (any file name). It replaces the current file
 - **Send now**: sends one digest immediately. Handy after an upload
 - **Email Format**: design file, section toggles (Echo, Revisit, book covers), subject line and a live preview
-
+<BR>
+<img width="1920" height="1754" alt="DrClawLights_Settings" src="https://github.com/user-attachments/assets/e6656f44-78ae-499a-a55a-43e2e627c0d5" />
+<BR>
+<img width="1920" height="1232" alt="DrClawLights_Email" src="https://github.com/user-attachments/assets/51f01130-fbdd-4ece-be3c-a97e1805a56b" />
+<BR>
 ## Other ways to test
 - Copy the SSH command from Railway and connect
 <BR>
@@ -45,5 +49,5 @@
 ## Misc
 - You need a Resend.com account
 - You need a Github account
-- You need a railways.com account linked to this github project
+- You need a railways.com account linked to your forked version of this github project
 - An Anthropic API key is optional. Only the Echo section uses it
