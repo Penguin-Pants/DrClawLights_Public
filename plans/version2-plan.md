@@ -1,6 +1,6 @@
 # DrClawlights v2 — Web Frontend Plan
 
-> **Historical record.** This is the plan the dashboard was built from. `CLAUDE.md` describes the current code. Known differences: settings are a plain dict (no dataclass); `HIGHLIGHTS_FILE`, `HISTORY_FILE`, `DESIGN_FILE` and `CONFIG_FILE` are environment variables only and are never stored in `config.json`; the send hour and minute have no environment variable (dashboard only); the design-token parser reads every `--name: value;` declaration in the file, not only the Quick Start block, and the last value wins.
+> **Historical record.** This is the plan the dashboard was built from. `README.md` and the code describe the current state. Known differences: settings are a plain dict (no dataclass); `HIGHLIGHTS_FILE`, `HISTORY_FILE`, `DESIGN_FILE` and `CONFIG_FILE` are environment variables only and are never stored in `config.json`; the send hour and minute have no environment variable (dashboard only); the design-token parser reads every `--name: value;` declaration in the file, not only the Quick Start block, and the last value wins.
 
 ## Project Overview
 
