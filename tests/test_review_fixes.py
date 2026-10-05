@@ -179,3 +179,19 @@ def test_echoed_highlights_recorded(tmp_path, monkeypatch):
     log = history.load_history(str(histp))["highlight_log"]
     assert history.get_highlight_id("BookA", "alpha") in log
     assert history.get_highlight_id("BookB", "beta") in log
+
+
+# --- subject builder: templates cannot reach attributes or crash ------------
+
+@pytest.mark.parametrize("template", ["{book1.x}", "{book1.upper}", "{book1[0]}", "{count:d}", "{", "{unknown}"])
+def test_subject_template_never_raises_or_leaks(template):
+    out = email_builder.build_subject([{"title": "A"}, {"title": "B"}], template)
+    assert isinstance(out, str) and out
+    assert "built-in method" not in out
+
+
+def test_subject_replaces_every_placeholder():
+    out = email_builder.build_subject(
+        [{"title": "A"}, {"title": "B"}], "{book1}|{book2}|{book_list}|{count}"
+    )
+    assert out == "A|B|A & B|2"
