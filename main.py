@@ -88,9 +88,14 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         for h in b["highlights"]
     }
 
+    # One date for the whole digest, in the configured timezone, not the
+    # server clock (UTC on Railway), which can be a day off for zones far
+    # from UTC. The header and the history log both use it.
+    today = datetime.now(resolve_timezone(config.get("timezone"))).date()
+
     revisit = None
     if config.get("show_revisit", True):
-        revisit = get_unseen_or_old_highlight(data, history, today_ids)
+        revisit = get_unseen_or_old_highlight(data, history, today_ids, today=today)
 
     echo = None
     if config.get("show_echo", True):
@@ -103,6 +108,10 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
                 echo = find_echo(selections, api_key)
             elif not api_key:
                 logger.info("ANTHROPIC_API_KEY not set — skipping echo section")
+
+    # The subject names the books picked today. Build it before the Echo
+    # filter, which can remove a book whose only highlight moved to the Echo.
+    subject = build_subject(selections, config.get("subject_template"))
 
     if echo:
         echo_texts = {
@@ -117,9 +126,6 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         selections = filtered
 
     tokens = load_design_tokens(config.get("design_file"))
-    # The header date follows the configured timezone, not the server clock
-    # (UTC on Railway), which can be a day off for zones far from UTC.
-    today = datetime.now(resolve_timezone(config.get("timezone"))).date()
     html = build_html(
         selections,
         metadata=data,
@@ -129,7 +135,6 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         show_covers=config.get("show_covers", True),
         today=today,
     )
-    subject = build_subject(selections, config.get("subject_template"))
 
     return {
         "subject": subject,
@@ -138,6 +143,7 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         "echo": echo,
         "revisit": revisit,
         "history": history,
+        "today": today,
         "config": config,
     }
 
@@ -207,7 +213,7 @@ def run_digest(config: dict) -> tuple[bool, str]:
             e = echo[side]
             eid = get_highlight_id(e["book_title"], e["text"])
             all_sent.append({"id": eid, "text": e["text"]})
-    record_sent_highlights(history, all_sent)
+    record_sent_highlights(history, all_sent, today=built["today"])
     save_history(history, config["history_file"])
     return True, f"Sent: {built['subject']}"
 

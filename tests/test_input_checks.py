@@ -2,6 +2,7 @@
 the environment or config.json, and the history file."""
 
 import json
+from datetime import date
 
 import pytest
 
@@ -10,6 +11,8 @@ import digest
 import email_builder
 import history
 import main
+
+TODAY = date(2026, 6, 1)
 
 
 @pytest.fixture
@@ -44,7 +47,7 @@ def test_odd_field_types_pass_validation_and_render():
 
 
 def test_odd_field_types_render_in_revisit():
-    r = history.get_unseen_or_old_highlight(ODD_DATA, {"highlight_log": {}}, set())
+    r = history.get_unseen_or_old_highlight(ODD_DATA, {"highlight_log": {}}, set(), today=TODAY)
     assert r["book_title"] == "Unknown Title"
     html = email_builder.build_html([], ODD_DATA, revisit=r)
     assert "Unknown Title" in html
@@ -53,7 +56,7 @@ def test_odd_field_types_render_in_revisit():
 def test_selection_and_revisit_use_the_same_highlight_id():
     sel = digest.select_books_and_highlights(ODD_DATA, 1, 1)
     today_ids = {history.get_highlight_id(sel[0]["title"], sel[0]["highlights"][0]["text"])}
-    assert history.get_unseen_or_old_highlight(ODD_DATA, {"highlight_log": {}}, today_ids) is None
+    assert history.get_unseen_or_old_highlight(ODD_DATA, {"highlight_log": {}}, today_ids, today=TODAY) is None
 
 
 # --- settings: ranges apply to every source ---------------------------------
@@ -104,12 +107,12 @@ REVISIT_DATA = {"books": [{"title": "A", "author": "AA", "highlights": [{"text":
 )
 def test_damaged_history_entry_counts_as_never_seen(entry):
     hid = history.get_highlight_id("A", "a1")
-    r = history.get_unseen_or_old_highlight(REVISIT_DATA, {"highlight_log": {hid: entry}}, set())
+    r = history.get_unseen_or_old_highlight(REVISIT_DATA, {"highlight_log": {hid: entry}}, set(), today=TODAY)
     assert r["highlight"]["text"] == "a1" and r["first_sent"] is None
 
 
 def test_record_overwrites_damaged_entry():
     hid = history.get_highlight_id("A", "a1")
     hist = {"highlight_log": {hid: "oops"}}
-    history.record_sent_highlights(hist, [{"id": hid}])
+    history.record_sent_highlights(hist, [{"id": hid}], today=TODAY)
     assert set(hist["highlight_log"][hid]) == {"first_sent", "last_sent"}
