@@ -271,3 +271,13 @@ def test_preview_with_highlights(client, tmp_path):
     login(client)
     r = client.get("/email-format/preview")
     assert r.status_code == 200 and "BookA" in r.text and "BookB" in r.text
+
+
+# --- subject template ---------------------------------------------------------------
+
+def test_bad_subject_template_does_not_break_the_page(client):
+    # Regression: "{book1.x}" was saved, then every render raised AttributeError.
+    login(client)
+    r = client.post("/email-format/subject", data={"subject_template": "{book1.x}"})
+    assert r.status_code == 200 and "Subject saved" in r.text
+    assert client.get("/email-format").status_code == 200

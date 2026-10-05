@@ -149,6 +149,9 @@ def _build_style(t: dict) -> str:
 """.strip()
 
 
+_PLACEHOLDER_RE = re.compile(r"\{(book1|book2|book_list|count)\}")
+
+
 def build_subject(selections: list[dict], template: str | None = None) -> str:
     template = (template or DEFAULT_SUBJECT_TEMPLATE).strip()
     if not selections:
@@ -159,12 +162,12 @@ def build_subject(selections: list[dict], template: str | None = None) -> str:
         "book1": titles[0],
         "book2": titles[1] if len(titles) > 1 else "",
         "book_list": " & ".join(titles),
-        "count": len(titles),
+        "count": str(len(titles)),
     }
-    try:
-        subject = template.format(**fields)
-    except (KeyError, IndexError, ValueError):
-        subject = f"Today's highlights from {titles[0]}"
+    # Replace only the known placeholders. str.format would also run attribute
+    # and index lookups such as "{book1.x}" from the user-edited template, and
+    # a failing lookup raised on every render. Other text stays as typed.
+    subject = _PLACEHOLDER_RE.sub(lambda m: fields[m.group(1)], template)
 
     if len(titles) == 1:
         # Drop a trailing punctuation separator left by an unfilled {book2}
