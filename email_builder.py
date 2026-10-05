@@ -95,58 +95,78 @@ def load_design_tokens(path: str | None = None) -> dict:
     return dict(tokens)
 
 
-def _build_style(t: dict) -> str:
-    """Build the email's <style> block from a resolved token set.
+def _styles(t: dict) -> dict[str, str]:
+    """Inline CSS for each element class, from a resolved token set.
 
-    Token values are baked in as literal hex/strings (not CSS ``var()``) so the
-    result renders correctly in email clients, which do not support custom
-    properties. Honours the design system's shadow-free, value-contrast
-    elevation.
+    Every styled element carries its own ``style`` attribute: the Gmail apps
+    drop ``<style>`` for non-Google accounts (caniemail.com, html-style).
+    Token values are literal (not CSS ``var()``), which email clients need.
+    Honours the design system's shadow-free, value-contrast elevation.
     """
-    return f"""
-    body {{ margin: 0; padding: 0; background: {t['color-fog']}; font-family: {t['font-body']}; }}
-    .wrapper {{ background: {t['color-fog']}; padding: 40px 16px; }}
-    .card {{ background: {t['color-snow']}; max-width: 768px; margin: 0 auto; border-radius: {t['radius-card']}; overflow: hidden; }}
-    .header {{ background: {t['color-ink']}; padding: 36px 48px; }}
-    .header h1 {{ margin: 0; color: {t['color-snow']}; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }}
-    .header p {{ margin: 8px 0 0; color: {t['color-silver-mist']}; font-size: 14px; letter-spacing: -0.01em; }}
-    .body {{ padding: 40px 48px; }}
-    .book-section {{ margin-bottom: 44px; }}
-    .book-section:last-child {{ margin-bottom: 0; }}
-    .book-meta {{ display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }}
-    .book-cover {{ width: 64px; min-width: 64px; height: 88px; object-fit: cover; border-radius: 8px; }}
-    .book-info {{ flex: 1; }}
-    .book-title {{ margin: 0 0 4px; font-size: 20px; color: {t['color-ink']}; font-weight: 700; letter-spacing: -0.02em; }}
-    .book-author {{ margin: 0; font-size: 14px; color: {t['color-graphite']}; }}
-    .highlight-block {{ border-left: 3px solid {t['color-silver-mist']}; padding: 14px 18px; margin-bottom: 16px; border-radius: 0 8px 8px 0; background: {t['color-fog']}; }}
-    .highlight-text {{ margin: 0; font-size: 17px; line-height: 1.5; color: {t['color-ink']}; letter-spacing: -0.01em; }}
-    .highlight-note {{ margin: 12px 0 0; font-size: 14px; color: {t['color-slate']}; }}
-    .highlight-note span {{ color: {t['color-graphite']}; }}
-    .highlight-location {{ margin: 8px 0 0; font-size: 12px; color: {t['color-graphite']}; }}
-    .divider {{ border: none; border-top: 1px solid {t['color-silver-mist']}; margin: 36px 0; }}
-    .footer {{ background: {t['color-fog']}; padding: 24px 48px; border-top: 1px solid {t['color-silver-mist']}; }}
-    .footer p {{ margin: 0; font-size: 12px; color: {t['color-graphite']}; line-height: 1.5; }}
-    .echo-section {{ margin: 0 0 32px; padding: 24px; background: {t['color-fog']}; border-radius: {t['radius-card']}; }}
-    .echo-label {{ margin: 0 0 16px; font-size: 12px; color: {t['color-graphite']}; letter-spacing: 0.08em; text-transform: uppercase; }}
-    .echo-pair {{ display: flex; gap: 14px; margin-bottom: 16px; }}
-    .echo-card {{ flex: 1; background: {t['color-snow']}; border-radius: 16px; padding: 16px; }}
-    .echo-card p {{ margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: {t['color-ink']}; }}
-    .echo-card small {{ font-size: 12px; color: {t['color-graphite']}; }}
-    .echo-explanation {{ margin: 0; font-size: 14px; color: {t['color-slate']}; line-height: 1.5; }}
-    .revisit-section {{ margin: 0 0 32px; padding: 22px 24px; background: {t['color-fog']}; border-radius: {t['radius-card']}; }}
-    .revisit-label {{ margin: 0 0 12px; font-size: 12px; color: {t['color-graphite']}; letter-spacing: 0.08em; text-transform: uppercase; }}
-    .revisit-meta {{ margin: 10px 0 0; font-size: 12px; color: {t['color-graphite']}; }}
-    @media only screen and (max-width: 640px) {{
-        .wrapper {{ padding: 0 !important; }}
-        .card {{ border-radius: 0 !important; }}
-        .header {{ padding: 28px 24px !important; }}
-        .body {{ padding: 28px 24px !important; }}
-        .footer {{ padding: 20px 24px !important; }}
-        .echo-section {{ padding: 18px !important; }}
-        .echo-pair {{ flex-direction: column !important; }}
-        .revisit-section {{ padding: 18px !important; }}
-    }}
+    return {
+        "body": f"margin: 0; padding: 0; background: {t['color-fog']}; font-family: {t['font-body']};",
+        "wrapper": f"background: {t['color-fog']}; padding: 40px 16px; font-family: {t['font-body']};",
+        "card": f"background: {t['color-snow']}; max-width: 768px; margin: 0 auto; border-radius: {t['radius-card']}; overflow: hidden;",
+        "header": f"background: {t['color-ink']}; padding: 36px 48px;",
+        "header-title": f"margin: 0; color: {t['color-snow']}; font-family: {t['font-display']}; font-size: 28px; font-weight: 700; letter-spacing: -0.02em;",
+        "header-date": f"margin: 8px 0 0; color: {t['color-silver-mist']}; font-size: 14px; letter-spacing: -0.01em;",
+        "body-inner": "padding: 40px 48px;",
+        "book-section": "margin-bottom: 44px;",
+        "book-meta": "margin-bottom: 20px;",
+        "book-cover-cell": "width: 64px; padding: 0 16px 0 0; vertical-align: top;",
+        "book-cover": "display: block; width: 64px; height: 88px; object-fit: cover; border-radius: 8px;",
+        "book-info": "vertical-align: top;",
+        "book-title": f"margin: 0 0 4px; font-size: 20px; color: {t['color-ink']}; font-weight: 700; letter-spacing: -0.02em;",
+        "book-author": f"margin: 0; font-size: 14px; color: {t['color-graphite']};",
+        "highlight-block": f"border-left: 3px solid {t['color-silver-mist']}; padding: 14px 18px; margin-bottom: 16px; border-radius: 0 8px 8px 0; background: {t['color-fog']};",
+        "highlight-text": f"margin: 0; font-size: 17px; line-height: 1.5; color: {t['color-ink']}; letter-spacing: -0.01em;",
+        "highlight-note": f"margin: 12px 0 0; font-size: 14px; color: {t['color-slate']};",
+        "note-label": f"color: {t['color-graphite']};",
+        "highlight-location": f"margin: 8px 0 0; font-size: 12px; color: {t['color-graphite']};",
+        "divider": f"border: none; border-top: 1px solid {t['color-silver-mist']}; margin: 36px 0;",
+        "footer": f"background: {t['color-fog']}; padding: 24px 48px; border-top: 1px solid {t['color-silver-mist']};",
+        "footer-text": f"margin: 0; font-size: 12px; color: {t['color-graphite']}; line-height: 1.5;",
+        "echo-section": f"margin: 0 0 32px; padding: 24px; background: {t['color-fog']}; border-radius: {t['radius-card']};",
+        "echo-label": f"margin: 0 0 16px; font-size: 12px; color: {t['color-graphite']}; letter-spacing: 0.08em; text-transform: uppercase;",
+        "echo-pair": "margin-bottom: 16px;",
+        # The cards are the table cells, so both share the row's height.
+        "echo-card": f"width: 49%; vertical-align: top; background: {t['color-snow']}; border-radius: 16px; padding: 16px;",
+        "echo-gap": "width: 2%; font-size: 0; line-height: 0;",
+        "echo-text": f"margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: {t['color-ink']};",
+        "echo-source": f"font-size: 12px; color: {t['color-graphite']};",
+        "echo-explanation": f"margin: 0; font-size: 14px; color: {t['color-slate']}; line-height: 1.5;",
+        "revisit-section": f"margin: 0 0 32px; padding: 22px 24px; background: {t['color-fog']}; border-radius: {t['radius-card']};",
+        "revisit-label": f"margin: 0 0 12px; font-size: 12px; color: {t['color-graphite']}; letter-spacing: 0.08em; text-transform: uppercase;",
+        "revisit-meta": f"margin: 10px 0 0; font-size: 12px; color: {t['color-graphite']};",
+    }
+
+
+# Phone-width overrides. Only clients that keep <style> apply them, and they
+# need !important to beat the inline styles.
+_MOBILE_CSS = """
+    @media only screen and (max-width: 640px) {
+        .wrapper { padding: 0 !important; }
+        .card { border-radius: 0 !important; }
+        .header { padding: 28px 24px !important; }
+        .body-inner { padding: 28px 24px !important; }
+        .footer { padding: 20px 24px !important; }
+        .echo-section { padding: 18px !important; }
+        .echo-card { display: block !important; width: auto !important; }
+        .echo-gap { display: block !important; width: auto !important; height: 12px !important; }
+        .revisit-section { padding: 18px !important; }
+    }
 """.strip()
+
+# Attributes for a layout table: no cell spacing. Screen readers skip it.
+_TABLE = 'role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
+
+
+def _a(s: dict, cls: str, extra: str = "") -> str:
+    """``class`` and inline ``style`` attributes for an element.
+
+    The style is escaped: token values come from the uploaded design file.
+    """
+    return f'class="{cls}" style="{_esc(s[cls] + extra)}"'
 
 
 _PLACEHOLDER_RE = re.compile(r"\{(book1|book2|book_list|count)\}")
@@ -187,20 +207,23 @@ def build_html(
     show_covers: bool = True,
     today: date | None = None,
 ) -> str:
-    tokens = tokens or _DEFAULT_TOKENS
+    s = _styles(tokens or _DEFAULT_TOKENS)
     date_line = (today or date.today()).strftime("%A, %d %B %Y")
     total_books = _esc(str(metadata.get("totalBooks", "—")))
     total_highlights = _esc(str(metadata.get("totalHighlights", "—")))
 
-    book_sections = "\n".join(_render_book(b, show_covers=show_covers) for b in selections)
+    book_sections = "\n".join(
+        _render_book(b, s, show_covers=show_covers, last=i == len(selections) - 1)
+        for i, b in enumerate(selections)
+    )
 
     special_parts = []
     if echo:
-        special_parts.append(_render_echo(echo))
+        special_parts.append(_render_echo(echo, s))
     if revisit:
-        special_parts.append(_render_revisit(revisit))
+        special_parts.append(_render_revisit(revisit, s))
     if special_parts:
-        special_parts.append('<hr class="divider">')
+        special_parts.append(f"<hr {_a(s, 'divider')}>")
     special_html = "\n".join(special_parts)
 
     return f"""<!DOCTYPE html>
@@ -209,21 +232,21 @@ def build_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Your Daily Highlights</title>
-<style>{_build_style(tokens)}</style>
+<style>{_MOBILE_CSS}</style>
 </head>
-<body>
-<div class="wrapper">
-  <div class="card">
-    <div class="header">
-      <h1>Your Daily Highlights</h1>
-      <p>{date_line}</p>
+<body style="{_esc(s['body'])}">
+<div {_a(s, 'wrapper')}>
+  <div {_a(s, 'card')}>
+    <div {_a(s, 'header')}>
+      <h1 {_a(s, 'header-title')}>Your Daily Highlights</h1>
+      <p {_a(s, 'header-date')}>{date_line}</p>
     </div>
-    <div class="body">
+    <div {_a(s, 'body-inner')}>
       {special_html}
       {book_sections}
     </div>
-    <div class="footer">
-      <p>Your library: {total_books} books &middot; {total_highlights} highlights<br>
+    <div {_a(s, 'footer')}>
+      <p {_a(s, 'footer-text')}>Your library: {total_books} books &middot; {total_highlights} highlights<br>
       Sent by DrClawLights &mdash; your personal highlights digest.</p>
     </div>
   </div>
@@ -232,81 +255,88 @@ def build_html(
 </html>"""
 
 
-def _render_echo(echo: dict) -> str:
-    a = echo["highlight_a"]
-    b = echo["highlight_b"]
-    return f"""<div class="echo-section">
-  <p class="echo-label">Echo &mdash; same idea, different books</p>
-  <div class="echo-pair">
-    <div class="echo-card">
-      <p>&ldquo;{_esc(a["text"])}&rdquo;</p>
-      <small>{_esc(a["book_title"])} &mdash; {_esc(a["book_author"])}</small>
-    </div>
-    <div class="echo-card">
-      <p>&ldquo;{_esc(b["text"])}&rdquo;</p>
-      <small>{_esc(b["book_title"])} &mdash; {_esc(b["book_author"])}</small>
-    </div>
-  </div>
-  <p class="echo-explanation">{_esc(echo["explanation"])}</p>
+def _render_echo(echo: dict, s: dict) -> str:
+    cells = f"\n      <td {_a(s, 'echo-gap')}>&nbsp;</td>\n".join(
+        f"""      <td {_a(s, 'echo-card')}>
+        <p {_a(s, 'echo-text')}>&ldquo;{_esc(h["text"])}&rdquo;</p>
+        <span {_a(s, 'echo-source')}>{_esc(h["book_title"])} &mdash; {_esc(h["book_author"])}</span>
+      </td>"""
+        for h in (echo["highlight_a"], echo["highlight_b"])
+    )
+    return f"""<div {_a(s, 'echo-section')}>
+  <p {_a(s, 'echo-label')}>Echo &mdash; same idea, different books</p>
+  <table {_TABLE} {_a(s, 'echo-pair')}>
+    <tr>
+{cells}
+    </tr>
+  </table>
+  <p {_a(s, 'echo-explanation')}>{_esc(echo["explanation"])}</p>
 </div>"""
 
 
-def _render_revisit(revisit: dict) -> str:
+def _render_note(h: dict, s: dict) -> str:
+    if not h.get("note"):
+        return ""
+    return (
+        f'<p {_a(s, "highlight-note")}><span {_a(s, "note-label")}>Your note: </span>'
+        f'{_esc(h["note"])}</p>'
+    )
+
+
+def _border(h: dict) -> str:
+    return f" border-left-color: {_COLOUR_MAP.get(h.get('color', 'yellow'), '#f5c842')};"
+
+
+def _render_revisit(revisit: dict, s: dict) -> str:
     h = revisit["highlight"]
-    border_color = _COLOUR_MAP.get(h.get("color", "yellow"), "#f5c842")
-    note_html = ""
-    if h.get("note"):
-        note_html = f'<p class="highlight-note"><span>Your note: </span>{_esc(h["note"])}</p>'
     first_sent = revisit.get("first_sent")
     meta_html = ""
     if first_sent:
-        meta_html = f'<p class="revisit-meta">First seen {_esc(str(first_sent))}</p>'
-    return f"""<div class="revisit-section">
-  <p class="revisit-label">Revisiting &mdash; {_esc(revisit["book_title"])}</p>
-  <div class="highlight-block" style="border-left-color: {border_color}; margin-bottom: 0;">
-    <p class="highlight-text">&ldquo;{_esc(h["text"])}&rdquo;</p>
-    {note_html}
+        meta_html = f'<p {_a(s, "revisit-meta")}>First seen {_esc(str(first_sent))}</p>'
+    return f"""<div {_a(s, 'revisit-section')}>
+  <p {_a(s, 'revisit-label')}>Revisiting &mdash; {_esc(revisit["book_title"])}</p>
+  <div {_a(s, 'highlight-block', _border(h) + ' margin-bottom: 0;')}>
+    <p {_a(s, 'highlight-text')}>&ldquo;{_esc(h["text"])}&rdquo;</p>
+    {_render_note(h, s)}
   </div>
   {meta_html}
 </div>"""
 
 
-def _render_book(book: dict, *, show_covers: bool = True) -> str:
+def _render_book(book: dict, s: dict, *, show_covers: bool = True, last: bool = False) -> str:
     cover_html = ""
     if show_covers and book.get("coverUrl"):
         cover_html = (
-            f'<img class="book-cover" src="{_esc(book["coverUrl"])}" '
-            f'alt="Cover of {_esc(book["title"])}">'
+            f'<td {_a(s, "book-cover-cell")}><img {_a(s, "book-cover")} width="64" height="88" '
+            f'src="{_esc(book["coverUrl"])}" alt="Cover of {_esc(book["title"])}"></td>'
         )
 
-    highlights_html = "\n".join(_render_highlight(h) for h in book["highlights"])
+    highlights_html = "\n".join(_render_highlight(h, s) for h in book["highlights"])
+    # The last section sits on the card's bottom padding, so it needs no gap.
+    section_extra = " margin-bottom: 0;" if last else ""
 
-    return f"""<div class="book-section">
-  <div class="book-meta">
-    {cover_html}
-    <div class="book-info">
-      <p class="book-title">{_esc(book["title"])}</p>
-      <p class="book-author">{_esc(book["author"])}</p>
-    </div>
-  </div>
+    return f"""<div {_a(s, 'book-section', section_extra)}>
+  <table {_TABLE} {_a(s, 'book-meta')}>
+    <tr>
+      {cover_html}
+      <td {_a(s, 'book-info')}>
+        <p {_a(s, 'book-title')}>{_esc(book["title"])}</p>
+        <p {_a(s, 'book-author')}>{_esc(book["author"])}</p>
+      </td>
+    </tr>
+  </table>
   {highlights_html}
 </div>"""
 
 
-def _render_highlight(h: dict) -> str:
-    border_color = _COLOUR_MAP.get(h.get("color", "yellow"), "#f5c842")
-    note_html = ""
-    if h.get("note"):
-        note_html = (
-            f'<p class="highlight-note"><span>Your note: </span>{_esc(h["note"])}</p>'
-        )
+def _render_highlight(h: dict, s: dict) -> str:
     location_html = ""
     if h.get("location"):
-        location_html = f'<p class="highlight-location">{_esc(h["location"])}</p>'
+        location_html = f'<p {_a(s, "highlight-location")}>{_esc(h["location"])}</p>'
 
-    return f"""<div class="highlight-block" style="border-left-color: {border_color};">
-  <p class="highlight-text">&ldquo;{_esc(h["text"])}&rdquo;</p>
-  {note_html}
+    return f"""<div {_a(s, 'highlight-block', _border(h))}>
+  <p {_a(s, 'highlight-text')}>&ldquo;{_esc(h["text"])}&rdquo;</p>
+  {_render_note(h, s)}
   {location_html}
 </div>"""
 
