@@ -1,10 +1,10 @@
 """First-run seeding for the persistent volume."""
 
 import logging
-import shutil
 from pathlib import Path
 
 from config import runtime_paths
+from storage import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +17,10 @@ def ensure_design_file() -> None:
     if dest.exists():
         return
     try:
-        dest.parent.mkdir(parents=True, exist_ok=True)
         if _BUNDLED_DESIGN.exists():
-            shutil.copyfile(_BUNDLED_DESIGN, dest)
+            # Atomic, so a failed copy leaves no partial file that would stop
+            # the next startup from seeding again.
+            atomic_write(dest, _BUNDLED_DESIGN.read_bytes())
             logger.info("Seeded default design file at %s", dest)
     except OSError as e:
         logger.warning("Could not seed design file at %s: %s", dest, e)
