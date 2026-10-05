@@ -80,7 +80,7 @@ def _coerce(key: str, value) -> object:
         except (TypeError, ValueError):
             number = None
         if number is None or not in_range(key, number):
-            logger.warning("Invalid %s %r — using default %r", key, value, DEFAULTS[key])
+            logger.warning("Invalid %s %r: using default %r", key, value, DEFAULTS[key])
             return DEFAULTS[key]
         return number
     if key in _BOOL_KEYS:
