@@ -76,9 +76,9 @@ def save_settings(
     except (ValueError, TypeError):
         return flash("Books and highlights per email must be whole numbers.", "error")
 
-    if not (0 <= send_hour <= 23) or not (0 <= send_minute <= 59):
+    if not (config_store.in_range("send_hour", send_hour) and config_store.in_range("send_minute", send_minute)):
         return flash("Send time must be a valid 24-hour time.", "error")
-    if books < 1 or highlights < 1:
+    if not (config_store.in_range("books_per_email", books) and config_store.in_range("highlights_per_book", highlights)):
         return flash("Books and highlights per email must be at least 1.", "error")
 
     # An unknown name would otherwise be saved and the scheduler would quietly

@@ -7,6 +7,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+from digest import book_author, book_title, normalize_highlight
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,7 +19,7 @@ def load_history(path: str) -> dict:
             return {"highlight_log": {}}
         with p.open("r", encoding="utf-8") as f:
             data = json.load(f)
-        if not isinstance(data.get("highlight_log"), dict):
+        if not isinstance(data, dict) or not isinstance(data.get("highlight_log"), dict):
             raise ValueError("unexpected schema")
         return data
     except (OSError, json.JSONDecodeError, ValueError) as e:
@@ -53,19 +55,17 @@ def get_unseen_or_old_highlight(
     old_seen = []
 
     for book in data.get("books", []):
-        title = book.get("title", "Unknown Title")
-        author = book.get("author", "Unknown Author")
+        title = book_title(book)
+        author = book_author(book)
         for h in book.get("highlights", []):
             hid = get_highlight_id(title, h["text"])
             if hid in today_ids:
                 continue
-            entry = log.get(hid)
-            if entry is None:
+            last = _last_sent(log.get(hid))
+            if last is None:
                 never_seen.append((title, author, h, None))
-            else:
-                last = date.fromisoformat(entry["last_sent"])
-                if last < cutoff:
-                    old_seen.append((title, author, h, entry["first_sent"], last))
+            elif last < cutoff:
+                old_seen.append((title, author, h, log[hid].get("first_sent"), last))
 
     if never_seen:
         # Random, not file order: taking the first entry walked the library
@@ -81,16 +81,23 @@ def get_unseen_or_old_highlight(
     return None
 
 
-def _make_revisit(book_title: str, book_author: str, h: dict, first_sent: Optional[str]) -> dict:
+def _last_sent(entry) -> Optional[date]:
+    """The entry's last send date, or None when the entry is missing or
+    damaged. A damaged entry then counts as never seen and is rewritten on
+    the next send."""
+    if not isinstance(entry, dict):
+        return None
+    try:
+        return date.fromisoformat(entry["last_sent"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _make_revisit(title: str, author: str, h: dict, first_sent: Optional[str]) -> dict:
     return {
-        "book_title": book_title,
-        "book_author": book_author,
-        "highlight": {
-            "text": h["text"],
-            "note": h.get("note"),
-            "location": h.get("location", ""),
-            "color": h.get("color", "yellow"),
-        },
+        "book_title": title,
+        "book_author": author,
+        "highlight": normalize_highlight(h),
         "first_sent": first_sent,
     }
 
@@ -101,7 +108,7 @@ def record_sent_highlights(history: dict, sent_highlights: list) -> None:
     for item in sent_highlights:
         hid = item["id"]
         entry = log.get(hid)
-        if entry is None:
+        if not isinstance(entry, dict):
             log[hid] = {"first_sent": today_str, "last_sent": today_str}
         else:
             entry["last_sent"] = today_str

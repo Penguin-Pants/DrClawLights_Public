@@ -39,7 +39,15 @@ DEFAULTS = {
     "show_covers": True,
 }
 
-_INT_KEYS = {"books_per_email", "highlights_per_book", "send_hour", "send_minute"}
+# Allowed range (inclusive) of each whole-number setting; None means no upper
+# bound. The one place these limits live: _coerce applies them to every
+# source (env seed, config.json, form) and the dashboard reuses in_range.
+INT_RANGES = {
+    "books_per_email": (1, None),
+    "highlights_per_book": (1, None),
+    "send_hour": (0, 23),
+    "send_minute": (0, 59),
+}
 _BOOL_KEYS = {"show_echo", "show_revisit", "show_covers"}
 
 # Environment variables that seed editable settings before the first UI save,
@@ -53,12 +61,21 @@ _ENV_SEED = {
 }
 
 
+def in_range(key: str, value: int) -> bool:
+    low, high = INT_RANGES[key]
+    return value >= low and (high is None or value <= high)
+
+
 def _coerce(key: str, value) -> object:
-    if key in _INT_KEYS:
+    if key in INT_RANGES:
         try:
-            return int(value)
+            number = int(value)
         except (TypeError, ValueError):
+            number = None
+        if number is None or not in_range(key, number):
+            logger.warning("Invalid %s %r — using default %r", key, value, DEFAULTS[key])
             return DEFAULTS[key]
+        return number
     if key in _BOOL_KEYS:
         if isinstance(value, bool):
             return value

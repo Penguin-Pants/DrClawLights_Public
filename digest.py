@@ -50,6 +50,38 @@ def validate_highlights(data) -> str | None:
     return None
 
 
+def _text(value, default: str = "") -> str:
+    """``value`` as display text. The export is user data, so a field can be
+    null, a number or a list. Only None uses ``default``: a title string is
+    kept exactly as before so existing history IDs stay the same."""
+    if value is None:
+        return default
+    return value if isinstance(value, str) else str(value)
+
+
+def book_title(book: dict) -> str:
+    return _text(book.get("title"), "Unknown Title")
+
+
+def book_author(book: dict) -> str:
+    return _text(book.get("author"), "Unknown Author")
+
+
+def normalize_highlight(h: dict) -> dict:
+    """The highlight fields the email renders, all as text.
+
+    Shared by the daily selection and the Revisit pick so both read a
+    highlight the same way.
+    """
+    note = _text(h.get("note"))
+    return {
+        "text": h["text"],
+        "note": note or None,
+        "location": _text(h.get("location")),
+        "color": _text(h.get("color"), "yellow"),
+    }
+
+
 def select_books_and_highlights(data: dict, n_books: int, n_highlights: int) -> list[dict]:
     books_with_highlights = [b for b in data.get("books", []) if b.get("highlights")]
     if not books_with_highlights:
@@ -65,18 +97,10 @@ def select_books_and_highlights(data: dict, n_books: int, n_highlights: int) -> 
         )
         result.append(
             {
-                "title": book.get("title", "Unknown Title"),
-                "author": book.get("author", "Unknown Author"),
-                "coverUrl": book.get("coverUrl"),
-                "highlights": [
-                    {
-                        "text": h["text"],
-                        "note": h.get("note"),
-                        "location": h.get("location", ""),
-                        "color": h.get("color", "yellow"),
-                    }
-                    for h in chosen_highlights
-                ],
+                "title": book_title(book),
+                "author": book_author(book),
+                "coverUrl": cover if isinstance(cover := book.get("coverUrl"), str) else None,
+                "highlights": [normalize_highlight(h) for h in chosen_highlights],
             }
         )
     return result
