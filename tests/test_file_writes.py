@@ -1,4 +1,4 @@
-"""File writes: atomic, unique temp names, and safe under concurrent saves."""
+"""File writes: atomic, with unique temp names and safe under concurrent saves."""
 
 import threading
 
@@ -20,7 +20,7 @@ def _run_threads(target, n):
     def wrap(i):
         try:
             target(i)
-        except Exception as e:  # noqa: BLE001 — collected and asserted below
+        except Exception as e:  # noqa: BLE001 (collected and asserted below)
             errors.append(e)
 
     threads = [threading.Thread(target=wrap, args=(i,)) for i in range(n)]
