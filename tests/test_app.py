@@ -9,8 +9,6 @@ import html
 import json
 import re
 
-from collections import deque
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -54,7 +52,7 @@ def client(tmp_path, monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(scheduler, "_last_run", None)
-    monkeypatch.setattr(auth, "_failed_logins", deque())
+    monkeypatch.setattr(auth, "_failed_logins", {})
     with TestClient(app, follow_redirects=False) as c:
         yield c
 
@@ -368,3 +366,71 @@ def test_oversized_design_upload_is_rejected(client, tmp_path, monkeypatch):
     body = b"--color-ink: #000;" + b" " * 200
     r = client.post("/email-format/design", files={"file": ("design.md", body, "text/markdown")})
     assert "flash error" in r.text and "too large" in r.text
+
+
+# --- review fixes: per-client throttle, pre-parse size limit, cookie rotation -------
+
+def test_one_client_cannot_lock_out_another(client):
+    # Regression: a global counter let one bot keep every admin locked out.
+    attacker = {"X-Real-IP": "203.0.113.9"}
+    for _ in range(auth.MAX_FAILED_LOGINS + 5):
+        client.post("/login", data={"password": "nope"}, headers=attacker)
+    assert client.post("/login", data={"password": PASSWORD}, headers=attacker).status_code == 429
+    admin = {"X-Real-IP": "198.51.100.7"}
+    assert client.post("/login", data={"password": PASSWORD}, headers=admin).status_code == 303
+
+
+def test_tracked_clients_are_capped(client, monkeypatch):
+    monkeypatch.setattr(auth, "MAX_TRACKED_CLIENTS", 5)
+    for n in range(20):
+        client.post("/login", data={"password": "nope"}, headers={"X-Real-IP": f"10.0.0.{n}"})
+    assert len(auth._failed_logins) <= 5
+
+
+def test_oversized_upload_is_refused_before_parsing(client, monkeypatch):
+    from routes import common, dashboard
+
+    monkeypatch.setattr(dashboard, "MAX_HIGHLIGHTS_BYTES", 10)
+    monkeypatch.setattr(common, "MULTIPART_SLACK_BYTES", 10)
+    reached = []
+    monkeypatch.setattr(common, "read_upload", lambda *a: reached.append(1))
+    login(client)
+    r = client.post("/upload", files={"file": ("h.json", b"x" * 500, "application/json")})
+    assert r.status_code == 413 and "too large" in r.text and reached == []
+
+
+def test_body_limit_also_counts_bytes_without_content_length(monkeypatch):
+    import asyncio
+
+    from routes import common
+    from routes.common import UploadSizeLimit
+
+    monkeypatch.setattr(common, "MULTIPART_SLACK_BYTES", 0)
+
+    async def app(scope, receive, send):
+        while (await receive()).get("more_body"):
+            pass
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    chunks = [{"type": "http.request", "body": b"x" * 40, "more_body": True}] * 5
+    sent = []
+
+    async def receive():
+        return chunks.pop(0) if chunks else {"type": "http.request", "body": b""}
+
+    async def send(message):
+        sent.append(message)
+
+    mw = UploadSizeLimit(app, limits={"/upload": lambda: 100})
+    scope = {"type": "http", "method": "POST", "path": "/upload", "headers": []}
+    asyncio.run(mw(scope, receive, send))
+    assert sent[0]["status"] == 413
+
+
+def test_cookies_from_before_the_secure_flag_are_rejected(client):
+    from itsdangerous import URLSafeTimedSerializer
+
+    old = URLSafeTimedSerializer(PASSWORD, salt="drclawlights-auth").dumps({"ok": True})
+    client.cookies.set("drclawlights_session", old)
+    assert client.get("/").status_code == 303

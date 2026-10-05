@@ -40,6 +40,13 @@
         setTimeout(function () { elt.remove(); }, 4000);
       }
     });
+    // Show the "too large" toast: htmx does not swap error responses by default.
+    document.body.addEventListener("htmx:beforeSwap", function (e) {
+      if (e.detail.xhr.status === 413) {
+        e.detail.shouldSwap = true;
+        e.detail.isError = false;
+      }
+    });
     document.getElementById("toast").addEventListener("click", function (e) {
       var close = e.target.closest(".flash-close");
       if (close) { close.parentElement.remove(); }

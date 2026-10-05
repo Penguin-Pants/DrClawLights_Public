@@ -18,6 +18,7 @@ import seed
 from routes import auth, dashboard, email_format
 from main import configure_logging
 from routes.auth import NotAuthenticated
+from routes.common import UploadSizeLimit
 
 configure_logging()
 # uvicorn sets up its own "uvicorn" logger (startup/shutdown lines, errors) to
@@ -52,6 +53,15 @@ app = FastAPI(
     openapi_url=None,
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
+# Checked before the form is parsed, so an oversized upload never reaches
+# temporary disk. Read per request, so the route modules own the limits.
+app.add_middleware(
+    UploadSizeLimit,
+    limits={
+        "/upload": lambda: dashboard.MAX_HIGHLIGHTS_BYTES,
+        "/email-format/design": lambda: email_format.MAX_DESIGN_BYTES,
+    },
+)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(email_format.router)

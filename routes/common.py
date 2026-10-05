@@ -1,6 +1,7 @@
 """Shared helpers for the route modules: templates, flash fragments, TZ list."""
 
 from html import escape
+from typing import Callable
 
 from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
@@ -65,3 +66,79 @@ async def read_upload(file: UploadFile, limit: int) -> bytes | None:
     """
     data = await file.read(limit + 1)
     return None if len(data) > limit else data
+
+
+# Room for the multipart boundaries and part headers around the file itself.
+MULTIPART_SLACK_BYTES = 64 * 1024
+
+_TOO_LARGE_HTML = (
+    b'<div class="flash error" role="status">That file is too large.'
+    b'<button type="button" class="flash-close" aria-label="Dismiss">&times;</button></div>'
+)
+
+
+class _BodyTooLarge(Exception):
+    pass
+
+
+async def _send_too_large(send) -> None:
+    await send({
+        "type": "http.response.start",
+        "status": 413,
+        "headers": [(b"content-type", b"text/html; charset=utf-8")],
+    })
+    await send({"type": "http.response.body", "body": _TOO_LARGE_HTML})
+
+
+class UploadSizeLimit:
+    """ASGI middleware: refuse an upload body over its route's limit before
+    FastAPI parses the form, which writes file parts to temporary disk.
+
+    ``limits`` maps a POST path to a callable that returns the file limit in
+    bytes, read per request. A Content-Length over the limit is refused at
+    once; otherwise the bytes are counted as they arrive.
+    """
+
+    def __init__(self, app, limits: dict[str, Callable[[], int]]):
+        self.app = app
+        self.limits = limits
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] != "POST" or scope["path"] not in self.limits:
+            await self.app(scope, receive, send)
+            return
+        limit = self.limits[scope["path"]]() + MULTIPART_SLACK_BYTES
+        length = dict(scope["headers"]).get(b"content-length", b"")
+        if length.isdigit() and int(length) > limit:
+            await _send_too_large(send)
+            return
+
+        received = 0
+        exceeded = False
+        replied = False
+
+        async def limited_receive():
+            nonlocal received, exceeded
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    exceeded = True
+                    raise _BodyTooLarge()
+            return message
+
+        async def guarded_send(message):
+            nonlocal replied
+            if not exceeded:
+                await send(message)
+            elif message["type"] == "http.response.start" and not replied:
+                # FastAPI turns the parse error into a 400; answer 413 instead.
+                replied = True
+                await _send_too_large(send)
+
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except _BodyTooLarge:
+            pass
+        if exceeded and not replied:
+            await _send_too_large(send)
