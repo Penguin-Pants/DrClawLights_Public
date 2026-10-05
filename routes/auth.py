@@ -3,6 +3,9 @@
 import hmac
 import logging
 import os
+import threading
+import time
+from collections import deque
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse
@@ -16,6 +19,41 @@ router = APIRouter()
 COOKIE_NAME = "drclawlights_session"
 MAX_AGE = 60 * 60 * 24 * 14  # 14 days
 _SALT = "drclawlights-auth"
+
+# Failed sign-ins allowed in a sliding window before every login is refused
+# until the window passes. The count is global, not per client: behind
+# Railway's proxy the client address is not trustworthy, and this tool has
+# one admin. A lockout also blocks the right password, so a guess made
+# during it learns nothing. In memory only, so a restart clears it.
+MAX_FAILED_LOGINS = 10
+FAILED_LOGIN_WINDOW = 15 * 60  # seconds
+_failed_logins: deque[float] = deque()
+_failed_lock = threading.Lock()
+
+
+def _locked_out() -> bool:
+    with _failed_lock:
+        cutoff = time.monotonic() - FAILED_LOGIN_WINDOW
+        while _failed_logins and _failed_logins[0] <= cutoff:
+            _failed_logins.popleft()
+        return len(_failed_logins) >= MAX_FAILED_LOGINS
+
+
+def _record_failed_login() -> None:
+    with _failed_lock:
+        _failed_logins.append(time.monotonic())
+
+
+def _clear_failed_logins() -> None:
+    with _failed_lock:
+        _failed_logins.clear()
+
+
+def _is_https(request: Request) -> bool:
+    # Railway ends TLS at its proxy and forwards plain HTTP, so also trust
+    # its X-Forwarded-Proto. Local http:// development keeps working.
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    return request.url.scheme == "https" or proto == "https"
 
 
 class NotAuthenticated(Exception):
@@ -67,17 +105,29 @@ def login(request: Request, password: str = Form(...)):
             status_code=503,
         )
 
+    if _locked_out():
+        logger.warning("Login refused: too many failed sign-ins")
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"error": "Too many failed sign-ins. Try again in 15 minutes."},
+            status_code=429,
+        )
+
     # Compare bytes: compare_digest rejects str arguments with non-ASCII
     # characters (TypeError -> HTTP 500).
     if hmac.compare_digest(password.encode("utf-8"), admin.encode("utf-8")):
+        _clear_failed_logins()
         token = _serializer().dumps({"ok": True})
         response = RedirectResponse("/", status_code=303)
         response.set_cookie(
             COOKIE_NAME, token,
-            max_age=MAX_AGE, httponly=True, samesite="lax",
+            max_age=MAX_AGE, httponly=True, samesite="lax", secure=_is_https(request),
         )
         return response
 
+    _record_failed_login()
+    logger.warning("Failed sign-in attempt")
     return templates.TemplateResponse(
         request,
         "login.html",

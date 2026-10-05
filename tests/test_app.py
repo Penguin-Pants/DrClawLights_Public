@@ -9,12 +9,15 @@ import html
 import json
 import re
 
+from collections import deque
+
 import pytest
 from fastapi.testclient import TestClient
 
 import config
 import scheduler
 from app import app
+from routes import auth
 from routes.common import flash
 
 PASSWORD = "test-password"
@@ -51,6 +54,7 @@ def client(tmp_path, monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(scheduler, "_last_run", None)
+    monkeypatch.setattr(auth, "_failed_logins", deque())
     with TestClient(app, follow_redirects=False) as c:
         yield c
 
@@ -303,3 +307,64 @@ def test_section_toggles_have_accessible_names(client):
     for box in boxes:
         target = re.search(r'aria-labelledby="([^"]+)"', box).group(1)
         assert f'id="{target}"' in page
+
+
+# --- login throttle -----------------------------------------------------------------
+
+def test_failed_logins_are_throttled_then_released(client, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(auth.time, "monotonic", lambda: now[0])
+    for _ in range(auth.MAX_FAILED_LOGINS):
+        assert client.post("/login", data={"password": "nope"}).status_code == 401
+    # Locked: even the right password is refused, so guesses learn nothing.
+    r = client.post("/login", data={"password": PASSWORD})
+    assert r.status_code == 429 and "Too many failed sign-ins" in r.text
+    now[0] += auth.FAILED_LOGIN_WINDOW + 1
+    assert client.post("/login", data={"password": PASSWORD}).status_code == 303
+
+
+def test_successful_login_clears_failures(client):
+    for _ in range(auth.MAX_FAILED_LOGINS - 1):
+        client.post("/login", data={"password": "nope"})
+    login(client)
+    for _ in range(auth.MAX_FAILED_LOGINS - 1):
+        assert client.post("/login", data={"password": "nope"}).status_code == 401
+
+
+# --- session cookie -------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "base_url, headers, secure",
+    [
+        ("http://testserver", {}, False),
+        ("https://testserver", {}, True),
+        ("http://testserver", {"X-Forwarded-Proto": "https"}, True),
+    ],
+)
+def test_session_cookie_is_secure_over_https(client, base_url, headers, secure):
+    client.base_url = base_url
+    r = client.post("/login", data={"password": PASSWORD}, headers=headers)
+    assert r.status_code == 303
+    assert ("secure" in r.headers["set-cookie"].lower()) is secure
+
+
+# --- upload size limits -----------------------------------------------------------------
+
+def test_oversized_highlights_upload_is_rejected(client, tmp_path, monkeypatch):
+    from routes import dashboard
+
+    monkeypatch.setattr(dashboard, "MAX_HIGHLIGHTS_BYTES", 100)
+    login(client)
+    text = _upload(client, b"{" + b" " * 200 + b"}")
+    assert "flash error" in text and "too large" in text
+    assert not (tmp_path / "highlights.json").exists()
+
+
+def test_oversized_design_upload_is_rejected(client, tmp_path, monkeypatch):
+    from routes import email_format
+
+    monkeypatch.setattr(email_format, "MAX_DESIGN_BYTES", 100)
+    login(client)
+    body = b"--color-ink: #000;" + b" " * 200
+    r = client.post("/email-format/design", files={"file": ("design.md", body, "text/markdown")})
+    assert "flash error" in r.text and "too large" in r.text

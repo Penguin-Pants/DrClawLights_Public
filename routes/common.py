@@ -2,6 +2,7 @@
 
 from html import escape
 
+from fastapi import UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -54,3 +55,13 @@ def flash(
     if trigger:
         response.headers["HX-Trigger"] = trigger
     return response
+
+
+async def read_upload(file: UploadFile, limit: int) -> bytes | None:
+    """The uploaded bytes, or None when the file is larger than ``limit``.
+
+    Reads at most ``limit + 1`` bytes, so an oversized upload never lands in
+    memory in full.
+    """
+    data = await file.read(limit + 1)
+    return None if len(data) > limit else data

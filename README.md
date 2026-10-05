@@ -21,7 +21,7 @@
 - Keep one instance with one worker (the default start command). More would send duplicate emails
 
 ## Daily use (dashboard)
-- Sign in with `ADMIN_PASSWORD`
+- Sign in with `ADMIN_PASSWORD`. After 10 failed sign-ins in 15 minutes, all sign-ins are refused until the 15 minutes pass (a restart also clears this)
 - **Settings**: sender and recipient address, books per email, highlights per book, send time and timezone. Changes take effect immediately
 - **Schedule**: the next digest time and the result of the last scheduled run
 - **Highlights file**: upload the JSON file exported by HighlightsGrabber (any file name). It replaces the current file
