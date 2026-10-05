@@ -128,10 +128,14 @@ def _styles(t: dict) -> dict[str, str]:
         "footer-text": f"margin: 0; font-size: 12px; color: {t['color-graphite']}; line-height: 1.5;",
         "echo-section": f"margin: 0 0 32px; padding: 24px; background: {t['color-fog']}; border-radius: {t['radius-card']};",
         "echo-label": f"margin: 0 0 16px; font-size: 12px; color: {t['color-graphite']}; letter-spacing: 0.08em; text-transform: uppercase;",
-        "echo-pair": "margin-bottom: 16px;",
-        # The cards are the table cells, so both share the row's height.
-        "echo-card": f"width: 49%; vertical-align: top; background: {t['color-snow']}; border-radius: 16px; padding: 16px;",
-        "echo-gap": "width: 2%; font-size: 0; line-height: 0;",
+        # Hybrid layout: two inline-block columns side by side when there is
+        # room for both (624px inside the full-width card), stacked when not.
+        # No media query needed, so it also stacks where <style> is dropped.
+        # font-size 0 removes the gap that whitespace adds between them.
+        "echo-pair": "font-size: 0; margin-bottom: 4px;",
+        "echo-col-first": "display: inline-block; vertical-align: top; width: 100%; max-width: 317px; box-sizing: border-box; padding: 0 14px 12px 0;",
+        "echo-col": "display: inline-block; vertical-align: top; width: 100%; max-width: 303px; padding: 0 0 12px;",
+        "echo-card": f"background: {t['color-snow']}; border-radius: 16px; padding: 16px;",
         "echo-text": f"margin: 0 0 8px; font-size: 15px; line-height: 1.5; color: {t['color-ink']};",
         "echo-source": f"font-size: 12px; color: {t['color-graphite']};",
         "echo-explanation": f"margin: 0; font-size: 14px; color: {t['color-slate']}; line-height: 1.5;",
@@ -151,8 +155,7 @@ _MOBILE_CSS = """
         .body-inner { padding: 28px 24px !important; }
         .footer { padding: 20px 24px !important; }
         .echo-section { padding: 18px !important; }
-        .echo-card { display: block !important; width: auto !important; }
-        .echo-gap { display: block !important; width: auto !important; height: 12px !important; }
+        .echo-col-first, .echo-col { max-width: 100% !important; padding-right: 0 !important; }
         .revisit-section { padding: 18px !important; }
     }
 """.strip()
@@ -256,20 +259,29 @@ def build_html(
 
 
 def _render_echo(echo: dict, s: dict) -> str:
-    cells = f"\n      <td {_a(s, 'echo-gap')}>&nbsp;</td>\n".join(
-        f"""      <td {_a(s, 'echo-card')}>
-        <p {_a(s, 'echo-text')}>&ldquo;{_esc(h["text"])}&rdquo;</p>
-        <span {_a(s, 'echo-source')}>{_esc(h["book_title"])} &mdash; {_esc(h["book_author"])}</span>
-      </td>"""
-        for h in (echo["highlight_a"], echo["highlight_b"])
-    )
+    a, b = echo["highlight_a"], echo["highlight_b"]
+
+    def card(h: dict) -> str:
+        return f"""<div {_a(s, 'echo-card')}>
+      <p {_a(s, 'echo-text')}>&ldquo;{_esc(h["text"])}&rdquo;</p>
+      <span {_a(s, 'echo-source')}>{_esc(h["book_title"])} &mdash; {_esc(h["book_author"])}</span>
+    </div>"""
+
+    # The [if mso] table is for Outlook for Windows, which ignores max-width
+    # and would otherwise stack the pair on desktop too.
     return f"""<div {_a(s, 'echo-section')}>
   <p {_a(s, 'echo-label')}>Echo &mdash; same idea, different books</p>
-  <table {_TABLE} {_a(s, 'echo-pair')}>
-    <tr>
-{cells}
-    </tr>
-  </table>
+  <div {_a(s, 'echo-pair')}>
+    <!--[if mso]><table {_TABLE}><tr><td width="50%" valign="top"><![endif]-->
+    <div {_a(s, 'echo-col-first')}>
+    {card(a)}
+    </div>
+    <!--[if mso]></td><td width="50%" valign="top"><![endif]-->
+    <div {_a(s, 'echo-col')}>
+    {card(b)}
+    </div>
+    <!--[if mso]></td></tr></table><![endif]-->
+  </div>
   <p {_a(s, 'echo-explanation')}>{_esc(echo["explanation"])}</p>
 </div>"""
 

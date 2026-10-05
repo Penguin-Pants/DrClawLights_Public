@@ -54,17 +54,32 @@ def test_design_tokens_reach_the_inline_styles():
     assert re.search(r'class="header"[^>]*style="[^"]*#123456', body)
 
 
-def test_side_by_side_layouts_are_presentation_tables():
+def test_book_headers_are_presentation_tables():
     body = _body(_html())
-    assert body.count('role="presentation"') >= 3  # two book headers + echo pair
-    echo = body.split('class="echo-section"', 1)[1]
-    assert len(re.findall(r'<td class="echo-card"', echo)) == 2
+    assert len(re.findall(r'<table role="presentation"[^>]*class="book-meta"', body)) == 2
+
+
+def test_echo_pair_stacks_on_narrow_screens_without_css():
+    # The Gmail apps drop <style> for non-Google accounts, so the media query
+    # cannot stack the pair there. Inline-block columns with a max-width wrap
+    # on their own when the screen is narrower than two columns.
+    echo = _body(_html()).split('class="echo-section"', 1)[1]
+    cols = re.findall(r'<div class="echo-col[^"]*" style="([^"]*)"', echo)
+    assert len(cols) == 2
+    for style in cols:
+        assert "display: inline-block" in style and "max-width:" in style and "width: 100%" in style
+
+
+def test_outlook_for_windows_keeps_the_pair_side_by_side():
+    # Outlook for Windows ignores max-width, so it gets its own table.
+    echo = _body(_html()).split('class="echo-section"', 1)[1]
+    assert "<!--[if mso]>" in echo and '<td width="50%"' in echo
 
 
 def test_style_block_keeps_only_the_mobile_overrides():
     style = _html().split("<style>", 1)[1].split("</style>", 1)[0]
     assert "@media only screen and (max-width: 640px)" in style
-    assert ".echo-card" in style  # stack the echo pair on phones
+    assert ".echo-col" in style  # full-width echo columns on phones
 
 
 def test_highlight_colour_and_token_quotes_stay_valid():
