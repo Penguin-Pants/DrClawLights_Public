@@ -115,6 +115,8 @@ def test_selection_skips_empty_books_and_caps_counts():
 
 # --- revisit ------------------------------------------------------------------------
 
+TODAY = datetime(2026, 6, 1).date()
+
 REVISIT_DATA = {"books": [
     {"title": "A", "author": "AA", "highlights": [{"text": "a1"}, {"text": "a2"}]},
     {"title": "B", "author": "BB", "highlights": [{"text": "b1"}]},
@@ -129,13 +131,13 @@ def test_revisit_prefers_never_seen_and_skips_today():
     today_ids = {history.get_highlight_id("A", "a1")}
     seen_long_ago = {"first_sent": "2020-01-01", "last_sent": "2020-01-01"}
     hist = _log(B_b1=seen_long_ago)
-    r = history.get_unseen_or_old_highlight(REVISIT_DATA, hist, today_ids)
+    r = history.get_unseen_or_old_highlight(REVISIT_DATA, hist, today_ids, today=TODAY)
     assert (r["book_title"], r["highlight"]["text"], r["first_sent"]) == ("A", "a2", None)
 
 
 def test_revisit_picks_randomly_among_never_seen(monkeypatch):
     monkeypatch.setattr(history.random, "choice", lambda items: items[-1])
-    r = history.get_unseen_or_old_highlight(REVISIT_DATA, {"highlight_log": {}}, set())
+    r = history.get_unseen_or_old_highlight(REVISIT_DATA, {"highlight_log": {}}, set(), today=TODAY)
     assert r["highlight"]["text"] == "b1"  # the last candidate, not file order
 
 
@@ -145,12 +147,51 @@ def test_revisit_falls_back_to_oldest_seen():
         A_a2={"first_sent": "2020-01-01", "last_sent": "2020-02-01"},
         B_b1={"first_sent": "2020-01-01", "last_sent": "2022-01-01"},
     )
-    r = history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set())
+    r = history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set(), today=TODAY)
     assert r["highlight"]["text"] == "a2" and r["first_sent"] == "2020-01-01"
 
 
 def test_revisit_none_when_everything_is_recent():
-    today = datetime.now().date().isoformat()
+    today = TODAY.isoformat()
     recent = {"first_sent": today, "last_sent": today}
     hist = _log(A_a1=recent, A_a2=recent, B_b1=recent)
-    assert history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set()) is None
+    assert history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set(), today=TODAY) is None
+
+
+# --- subject and dates ----------------------------------------------------------
+
+def test_subject_keeps_book_names_when_echo_takes_every_highlight(tmp_path):
+    # Regression: with one highlight per book the Echo removed both books from
+    # the list, and the subject fell back to "Your Daily Highlights".
+    cfg = _cfg(tmp_path, highlights_per_book=1, anthropic_api_key="k", show_revisit=False)
+    built = main.build_email(cfg, for_preview=True)
+    assert built["echo"] is not None and built["selections"] == []
+    assert "BookA" in built["subject"] and "BookB" in built["subject"]
+
+
+class _LateEveningUTC(datetime):
+    # 23:30 UTC on 1 Jan is already 2 Jan in Berlin.
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 1, 1, 23, 30, tzinfo=pytz.utc).astimezone(tz)
+
+
+def test_history_dates_use_configured_timezone(tmp_path, monkeypatch):
+    import resend
+
+    monkeypatch.setattr(main, "datetime", _LateEveningUTC)
+    monkeypatch.setattr(resend.Emails, "send", lambda payload: {"id": "1"})
+    cfg = _cfg(tmp_path, timezone="Europe/Berlin", show_echo=False, show_revisit=False,
+               resend_api_key="rk", from_email="f@x", recipient_email="r@x")
+    assert main.run_digest(cfg)[0] is True
+    log = history.load_history(cfg["history_file"])["highlight_log"]
+    assert {e["last_sent"] for e in log.values()} == {"2026-01-02"}
+
+
+def test_revisit_cutoff_counts_from_the_given_day():
+    hist = _log(A_a1={"first_sent": "2026-01-01", "last_sent": "2026-01-01"},
+                A_a2={"first_sent": "2026-01-01", "last_sent": "2026-01-01"},
+                B_b1={"first_sent": "2026-01-01", "last_sent": "2026-01-01"})
+    assert history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set(), today=datetime(2026, 1, 30).date()) is None
+    r = history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set(), today=datetime(2026, 2, 1).date())
+    assert r is not None

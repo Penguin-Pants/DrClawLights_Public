@@ -46,10 +46,12 @@ def get_unseen_or_old_highlight(
     data: dict,
     history: dict,
     today_ids: set,
+    *,
+    today: date,
     cutoff_days: int = 30,
 ) -> Optional[dict]:
     log = history.get("highlight_log", {})
-    cutoff = date.today() - timedelta(days=cutoff_days)
+    cutoff = today - timedelta(days=cutoff_days)
 
     never_seen = []
     old_seen = []
@@ -102,8 +104,8 @@ def _make_revisit(title: str, author: str, h: dict, first_sent: Optional[str]) -
     }
 
 
-def record_sent_highlights(history: dict, sent_highlights: list) -> None:
-    today_str = date.today().isoformat()
+def record_sent_highlights(history: dict, sent_highlights: list, *, today: date) -> None:
+    today_str = today.isoformat()
     log = history.setdefault("highlight_log", {})
     for item in sent_highlights:
         hid = item["id"]
