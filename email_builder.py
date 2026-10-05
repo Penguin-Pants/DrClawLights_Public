@@ -260,7 +260,7 @@ def _render_revisit(revisit: dict) -> str:
     first_sent = revisit.get("first_sent")
     meta_html = ""
     if first_sent:
-        meta_html = f'<p class="revisit-meta">First seen {first_sent}</p>'
+        meta_html = f'<p class="revisit-meta">First seen {_esc(str(first_sent))}</p>'
     return f"""<div class="revisit-section">
   <p class="revisit-label">Revisiting &mdash; {_esc(revisit["book_title"])}</p>
   <div class="highlight-block" style="border-left-color: {border_color}; margin-bottom: 0;">
