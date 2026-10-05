@@ -1,13 +1,13 @@
 import hashlib
 import json
 import logging
-import os
 import random
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
 from digest import book_author, book_title, normalize_highlight
+from storage import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,7 @@ def load_history(path: str) -> dict:
 
 def save_history(history: dict, path: str) -> None:
     try:
-        p = Path(path)
-        tmp = p.with_suffix(".tmp")
-        tmp.write_text(json.dumps(history, indent=2), encoding="utf-8")
-        os.replace(tmp, p)
+        atomic_write(path, json.dumps(history, indent=2))
     except OSError as e:
         logger.error("Could not save history to %s: %s", path, e)
 

@@ -12,13 +12,20 @@ Precedence for an editable setting: built-in default -> environment seed
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 
 import pytz
 
+from storage import atomic_write
+
 logger = logging.getLogger(__name__)
 
 CONFIG_FILE = os.environ.get("CONFIG_FILE", "/data/config.json")
+
+# Serializes save_settings' read-modify-write: the dashboard runs sync routes
+# in a thread pool, so two saves (e.g. quick toggle clicks) can overlap.
+_SAVE_LOCK = threading.Lock()
 
 # The product default subject line. Referenced wherever an unset/blank template
 # falls back, so the default lives in exactly one place.
@@ -118,16 +125,12 @@ def load_settings() -> dict:
 
 def save_settings(updates: dict) -> dict:
     """Merge ``updates`` into the stored settings and persist them atomically."""
-    settings = load_settings()
-    for key in DEFAULTS:
-        if key in updates:
-            settings[key] = _coerce(key, updates[key])
-
-    path = Path(CONFIG_FILE)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(settings, indent=2), encoding="utf-8")
-    os.replace(tmp, path)
+    with _SAVE_LOCK:
+        settings = load_settings()
+        for key in DEFAULTS:
+            if key in updates:
+                settings[key] = _coerce(key, updates[key])
+        atomic_write(CONFIG_FILE, json.dumps(settings, indent=2))
     return settings
 
 

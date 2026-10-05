@@ -13,6 +13,7 @@ from email_builder import build_subject
 from main import build_email
 from routes.auth import require_auth
 from routes.common import flash, templates
+from storage import atomic_write
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,10 +55,8 @@ async def upload_design(
     if "--color-" not in text:
         return flash("That file has no design tokens (no --color-* properties).", "error")
 
-    path = Path(config_store.runtime_paths()["design_file"])
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        atomic_write(config_store.runtime_paths()["design_file"], text)
     except OSError as e:
         logger.error("Could not write design file: %s", e)
         return flash("Could not save the design file on the server.", "error")
