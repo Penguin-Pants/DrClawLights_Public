@@ -101,9 +101,9 @@ def save_settings(
     )
     scheduler.reschedule()
     # Also refresh the "Next digest" line out-of-band so it matches the save.
-    return HTMLResponse(
-        '<div class="flash success" role="status">Settings saved.</div>'
-        f'<strong id="next-run" hx-swap-oob="true">{escape(_next_run_text())}</strong>'
+    return flash(
+        "Settings saved.",
+        extra_html=f'<strong id="next-run" hx-swap-oob="true">{escape(_next_run_text())}</strong>',
     )
 
 

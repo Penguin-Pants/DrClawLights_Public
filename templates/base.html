@@ -32,14 +32,17 @@
       var frame = document.getElementById("email-preview");
       if (frame) { frame.contentWindow.location.reload(); }
     });
-    // Auto-dismiss toasts after a few seconds.
-    document.body.addEventListener("htmx:afterSwap", function (e) {
-      if (e.detail.target && e.detail.target.id === "toast") {
-        setTimeout(function () {
-          var first = document.querySelector("#toast .flash");
-          if (first) { first.remove(); }
-        }, 4000);
+    // Auto-dismiss each success toast after a few seconds. htmx.onLoad hands
+    // over the element that was just added, so each timer removes its own
+    // toast. Errors stay until dismissed.
+    htmx.onLoad(function (elt) {
+      if (elt.classList && elt.classList.contains("flash") && !elt.classList.contains("error")) {
+        setTimeout(function () { elt.remove(); }, 4000);
       }
+    });
+    document.getElementById("toast").addEventListener("click", function (e) {
+      var close = e.target.closest(".flash-close");
+      if (close) { close.parentElement.remove(); }
     });
   </script>
 </body>

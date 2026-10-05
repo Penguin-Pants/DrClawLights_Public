@@ -29,6 +29,28 @@ COMMON_TIMEZONES = [
 ]
 
 
-def flash(message: str, kind: str = "success") -> HTMLResponse:
-    """A small HTMX fragment shown in the toast zone after an action."""
-    return HTMLResponse(f'<div class="flash {kind}" role="status">{escape(message)}</div>')
+def flash(
+    message: str,
+    kind: str = "success",
+    *,
+    extra_html: str = "",
+    trigger: str | None = None,
+) -> HTMLResponse:
+    """A small HTMX fragment shown in the toast zone after an action.
+
+    ``message`` is escaped. ``extra_html`` (already-safe markup, e.g. an
+    out-of-band swap) is appended after the toast, and ``trigger`` sets the
+    HX-Trigger client event. Errors get a dismiss button: base.html only
+    auto-dismisses success toasts, so an error stays until the user reads it.
+    """
+    dismiss = (
+        '<button type="button" class="flash-close" aria-label="Dismiss">&times;</button>'
+        if kind == "error"
+        else ""
+    )
+    response = HTMLResponse(
+        f'<div class="flash {kind}" role="status">{escape(message)}{dismiss}</div>{extra_html}'
+    )
+    if trigger:
+        response.headers["HX-Trigger"] = trigger
+    return response
