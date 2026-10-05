@@ -230,38 +230,22 @@ def _send_digest(config: dict) -> tuple[bool, str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="DrClawLights highlights digest")
+    parser = argparse.ArgumentParser(
+        description=(
+            "DrClawLights highlights digest. The web app (uvicorn app:app) "
+            "runs the daily schedule; this command sends one digest on demand."
+        )
+    )
     parser.add_argument(
         "--send-now",
         action="store_true",
-        help="Send the digest immediately instead of waiting for the scheduled time",
+        help="Send one digest immediately",
     )
     args = parser.parse_args()
+    if not args.send_now:
+        parser.error("use --send-now; scheduled sends run in the web app (uvicorn app:app)")
 
-    config = get_runtime_config()
-
-    if args.send_now:
-        run_digest(config)
-        return
-
-    # Standalone scheduler mode. The Railway deployment runs the web app
-    # (app.py), which owns the scheduler; this path remains for local use.
-    from apscheduler.schedulers.blocking import BlockingScheduler
-
-    tz = resolve_timezone(config["timezone"])
-    scheduler = BlockingScheduler(timezone=tz)
-    scheduler.add_job(
-        run_digest, "cron",
-        hour=config["send_hour"], minute=config["send_minute"], args=[config],
-    )
-    logger.info(
-        "Scheduler started — digest will run daily at %02d:%02d %s",
-        config["send_hour"], config["send_minute"], config["timezone"],
-    )
-    try:
-        scheduler.start()
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Scheduler stopped")
+    run_digest(get_runtime_config())
 
 
 if __name__ == "__main__":

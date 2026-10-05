@@ -49,5 +49,5 @@
 ## Misc
 - You need a Resend.com account
 - You need a Github account
-- You need a railways.com account linked to your forked version of this github project
+- You need a railway.com account linked to your forked version of this github project
 - An Anthropic API key is optional. Only the Echo section uses it
