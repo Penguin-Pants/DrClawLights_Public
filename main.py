@@ -16,7 +16,7 @@ from history import (
     record_sent_highlights,
     save_history,
 )
-from insights import find_echo
+from insights import DEFAULT_MODEL as DEFAULT_ECHO_MODEL, EchoUnavailable, find_echo
 
 def configure_logging() -> None:
     """Send INFO and below to stdout and WARNING and above to stderr.
@@ -101,6 +101,7 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         revisit = get_unseen_or_old_highlight(data, history, today_ids, today=today)
 
     echo = None
+    echo_error = None
     if config.get("show_echo", True):
         if for_preview:
             # Mirror production: without a key the real email has no Echo.
@@ -108,7 +109,13 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         else:
             api_key = config["anthropic_api_key"]
             if api_key and len(selections) >= 2:
-                echo = find_echo(selections, api_key)
+                try:
+                    echo = find_echo(
+                        selections, api_key, model=config.get("echo_model") or DEFAULT_ECHO_MODEL
+                    )
+                except EchoUnavailable as e:
+                    logger.error("Echo skipped: %s", e)
+                    echo_error = str(e)
             elif not api_key:
                 logger.info("ANTHROPIC_API_KEY not set — skipping echo section")
 
@@ -144,6 +151,7 @@ def build_email(config: dict, *, for_preview: bool = False) -> dict | None:
         "html": html,
         "selections": selections,
         "echo": echo,
+        "echo_error": echo_error,
         "revisit": revisit,
         "history": history,
         "today": today,
@@ -226,7 +234,11 @@ def _send_digest(config: dict) -> tuple[bool, str]:
             all_sent.append({"id": eid, "text": e["text"]})
     record_sent_highlights(history, all_sent, today=built["today"])
     save_history(history, config["history_file"])
-    return True, f"Sent: {built['subject']}"
+    message = f"Sent: {built['subject']}"
+    if built["echo_error"]:
+        # Shown as the dashboard's last-run line, so a broken Echo is visible.
+        message += f" (Echo skipped: {built['echo_error']})"
+    return True, message
 
 
 def main() -> None:

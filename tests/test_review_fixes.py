@@ -153,7 +153,7 @@ def test_echoed_highlights_recorded(tmp_path, monkeypatch):
     monkeypatch.setattr(
         main,
         "find_echo",
-        lambda selections, key: {
+        lambda selections, key, model: {
             "highlight_a": {"text": "alpha", "book_title": "BookA", "book_author": "AA"},
             "highlight_b": {"text": "beta", "book_title": "BookB", "book_author": "BB"},
             "explanation": "x",

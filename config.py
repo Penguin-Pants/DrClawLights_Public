@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytz
 
+from insights import DEFAULT_MODEL as DEFAULT_ECHO_MODEL
+
 from storage import atomic_write
 
 logger = logging.getLogger(__name__)
@@ -167,5 +169,6 @@ def get_runtime_config() -> dict:
         **settings,
         "resend_api_key": os.environ.get("RESEND_API_KEY", "").strip(),
         "anthropic_api_key": os.environ.get("ANTHROPIC_API_KEY", "").strip(),
+        "echo_model": os.environ.get("ECHO_MODEL", "").strip() or DEFAULT_ECHO_MODEL,
         **runtime_paths(),
     }

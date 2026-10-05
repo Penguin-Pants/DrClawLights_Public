@@ -20,6 +20,14 @@ TWO_BOOKS = [
 ]
 
 
+def _reply(text: str, stop_reason: str = "end_turn"):
+    """A Messages API response shape: thinking (empty) then the text block."""
+    return SimpleNamespace(
+        stop_reason=stop_reason,
+        content=[SimpleNamespace(type="thinking", thinking=""), SimpleNamespace(type="text", text=text)],
+    )
+
+
 def _fake_anthropic(reply: str, calls: list):
     class FakeClient:
         def __init__(self, **kwargs):
@@ -27,7 +35,7 @@ def _fake_anthropic(reply: str, calls: list):
             self.messages = self
 
         def create(self, **kwargs):
-            return SimpleNamespace(content=[SimpleNamespace(text=reply)])
+            return _reply(reply)
 
     return FakeClient
 
@@ -195,3 +203,100 @@ def test_revisit_cutoff_counts_from_the_given_day():
     assert history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set(), today=datetime(2026, 1, 30).date()) is None
     r = history.get_unseen_or_old_highlight(REVISIT_DATA, hist, set(), today=datetime(2026, 2, 1).date())
     assert r is not None
+
+
+# --- echo model and failures ------------------------------------------------------
+
+def _api_error(cls, status):
+    try:
+        import httpx2 as httpx  # anthropic 1.x
+    except ImportError:
+        import httpx  # anthropic 0.x
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    return cls("boom", response=httpx.Response(status, request=request), body=None)
+
+
+def _raising_anthropic(error):
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.messages = self
+
+        def create(self, **kwargs):
+            raise error
+
+    return FakeClient
+
+
+def test_find_echo_uses_the_given_model(monkeypatch):
+    seen = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.messages = self
+
+        def create(self, **kwargs):
+            seen.append(kwargs["model"])
+            return _reply('{"a": 0, "b": 1, "explanation": "x"}')
+
+    monkeypatch.setattr(insights.anthropic, "Anthropic", FakeClient)
+    assert insights.find_echo(TWO_BOOKS, "key", model="some-model") is not None
+    assert seen == ["some-model"]
+
+
+def test_find_echo_reports_a_missing_model(monkeypatch):
+    import anthropic
+    import pytest
+
+    error = _api_error(anthropic.NotFoundError, 404)
+    monkeypatch.setattr(insights.anthropic, "Anthropic", _raising_anthropic(error))
+    with pytest.raises(insights.EchoUnavailable, match="old-model.*ECHO_MODEL"):
+        insights.find_echo(TWO_BOOKS, "key", model="old-model")
+
+
+def test_find_echo_reports_other_api_errors(monkeypatch):
+    import anthropic
+    import pytest
+
+    error = _api_error(anthropic.InternalServerError, 500)
+    monkeypatch.setattr(insights.anthropic, "Anthropic", _raising_anthropic(error))
+    with pytest.raises(insights.EchoUnavailable):
+        insights.find_echo(TWO_BOOKS, "key")
+
+
+def test_digest_still_sends_and_reports_a_failed_echo(tmp_path, monkeypatch):
+    import resend
+
+    sent = []
+    monkeypatch.setattr(resend.Emails, "send", lambda payload: sent.append(payload) or {"id": "1"})
+
+    def failing_echo(selections, key, model):
+        raise insights.EchoUnavailable("model gone")
+
+    monkeypatch.setattr(main, "find_echo", failing_echo)
+    cfg = _cfg(tmp_path, anthropic_api_key="k", resend_api_key="rk",
+               from_email="f@x", recipient_email="r@x", echo_model="m")
+    ok, message = main.run_digest(cfg)
+    assert ok is True and len(sent) == 1
+    assert "Echo skipped: model gone" in message
+
+
+def test_echo_model_comes_from_the_environment(monkeypatch, tmp_path):
+    import config
+
+    monkeypatch.setattr(config, "CONFIG_FILE", str(tmp_path / "c.json"))
+    monkeypatch.delenv("ECHO_MODEL", raising=False)
+    assert config.get_runtime_config()["echo_model"] == insights.DEFAULT_MODEL
+    monkeypatch.setenv("ECHO_MODEL", "claude-x")
+    assert config.get_runtime_config()["echo_model"] == "claude-x"
+
+
+def test_find_echo_returns_none_on_refusal(monkeypatch):
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.messages = self
+
+        def create(self, **kwargs):
+            return _reply("", stop_reason="refusal")
+
+    monkeypatch.setattr(insights.anthropic, "Anthropic", FakeClient)
+    assert insights.find_echo(TWO_BOOKS, "key") is None
