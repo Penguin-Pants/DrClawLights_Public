@@ -108,7 +108,8 @@ def record_sent_highlights(history: dict, sent_highlights: list) -> None:
     for item in sent_highlights:
         hid = item["id"]
         entry = log.get(hid)
-        if not isinstance(entry, dict):
+        if _last_sent(entry) is None:
+            # New, or damaged in any way: start the entry over.
             log[hid] = {"first_sent": today_str, "last_sent": today_str}
         else:
             entry["last_sent"] = today_str
