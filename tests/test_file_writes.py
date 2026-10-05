@@ -96,3 +96,24 @@ def test_concurrent_digests_keep_both_history_updates(tmp_path, monkeypatch):
     monkeypatch.setattr(resend.Emails, "send", lambda payload: time.sleep(0.2) or {"id": "1"})
     assert _run_threads(lambda i: main.run_digest(configs[i]), 2) == []
     assert len(history.load_history(str(tmp_path / "history.json"))["highlight_log"]) == 6
+
+
+def test_failed_design_seed_leaves_no_partial_file(tmp_path, monkeypatch):
+    # Regression: a copy that failed midway left a partial design.md, and
+    # the next startup skipped the seed because the file existed.
+    import seed
+
+    dest = tmp_path / "design.md"
+    monkeypatch.setenv("DESIGN_FILE", str(dest))
+
+    def boom(*args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(storage.os, "replace", boom)
+    seed.ensure_design_file()
+    assert not dest.exists()
+
+    monkeypatch.undo()
+    monkeypatch.setenv("DESIGN_FILE", str(dest))
+    seed.ensure_design_file()
+    assert dest.read_bytes() == seed._BUNDLED_DESIGN.read_bytes()

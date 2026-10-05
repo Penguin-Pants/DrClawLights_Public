@@ -1,5 +1,5 @@
-"""Input checks at the trust boundaries: the highlights file, settings from
-the environment or config.json, and the history file."""
+"""Input checks at the trust boundaries: the highlights file, the settings
+from the environment or config.json and the history file."""
 
 import json
 from datetime import date
@@ -111,8 +111,9 @@ def test_damaged_history_entry_counts_as_never_seen(entry):
     assert r["highlight"]["text"] == "a1" and r["first_sent"] is None
 
 
-def test_record_overwrites_damaged_entry():
+@pytest.mark.parametrize("entry", ["oops", {}, {"first_sent": "2020-01-01", "last_sent": "bad"}])
+def test_record_overwrites_damaged_entry(entry):
     hid = history.get_highlight_id("A", "a1")
-    hist = {"highlight_log": {hid: "oops"}}
+    hist = {"highlight_log": {hid: entry}}
     history.record_sent_highlights(hist, [{"id": hid}], today=TODAY)
-    assert set(hist["highlight_log"][hid]) == {"first_sent", "last_sent"}
+    assert hist["highlight_log"][hid] == {"first_sent": TODAY.isoformat(), "last_sent": TODAY.isoformat()}
