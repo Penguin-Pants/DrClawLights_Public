@@ -23,29 +23,29 @@
       <p class="hint">Turn optional parts of the email on or off. Saves automatically.</p>
       <form hx-post="/email-format/toggles" hx-trigger="change" hx-target="#toast" hx-swap="afterbegin">
         <div class="toggle-row">
-          <span class="label">Echo
+          <span class="label" id="label-echo">Echo
             <span class="sub">AI-found connection between two books (needs Anthropic key)</span>
           </span>
           <label class="switch">
-            <input type="checkbox" name="show_echo" {% if settings.show_echo %}checked{% endif %}>
+            <input type="checkbox" name="show_echo" aria-labelledby="label-echo" {% if settings.show_echo %}checked{% endif %}>
             <span class="slider"></span>
           </label>
         </div>
         <div class="toggle-row">
-          <span class="label">Revisit
+          <span class="label" id="label-revisit">Revisit
             <span class="sub">A highlight you haven't seen in a while</span>
           </span>
           <label class="switch">
-            <input type="checkbox" name="show_revisit" {% if settings.show_revisit %}checked{% endif %}>
+            <input type="checkbox" name="show_revisit" aria-labelledby="label-revisit" {% if settings.show_revisit %}checked{% endif %}>
             <span class="slider"></span>
           </label>
         </div>
         <div class="toggle-row">
-          <span class="label">Book covers
+          <span class="label" id="label-covers">Book covers
             <span class="sub">Show cover images next to each book</span>
           </span>
           <label class="switch">
-            <input type="checkbox" name="show_covers" {% if settings.show_covers %}checked{% endif %}>
+            <input type="checkbox" name="show_covers" aria-labelledby="label-covers" {% if settings.show_covers %}checked{% endif %}>
             <span class="slider"></span>
           </label>
         </div>

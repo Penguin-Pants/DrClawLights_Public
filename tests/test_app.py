@@ -7,6 +7,7 @@ unless a test monkeypatches them.
 
 import html
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ from fastapi.testclient import TestClient
 import config
 import scheduler
 from app import app
+from routes.common import flash
 
 PASSWORD = "test-password"
 
@@ -281,3 +283,23 @@ def test_bad_subject_template_does_not_break_the_page(client):
     r = client.post("/email-format/subject", data={"subject_template": "{book1.x}"})
     assert r.status_code == 200 and "Subject saved" in r.text
     assert client.get("/email-format").status_code == 200
+
+
+# --- notifications and toggles ------------------------------------------------------
+
+def test_settings_and_subject_responses_use_the_shared_flash(client):
+    login(client)
+    shared = flash("Settings saved.").body.decode()
+    assert client.post("/settings", data={**SETTINGS_FORM, "timezone": "UTC"}).text.startswith(shared)
+    shared = flash("Subject saved.").body.decode()
+    assert client.post("/email-format/subject", data={"subject_template": "{book1}"}).text.startswith(shared)
+
+
+def test_section_toggles_have_accessible_names(client):
+    login(client)
+    page = client.get("/email-format").text
+    boxes = re.findall(r'<input type="checkbox"[^>]*>', page)
+    assert len(boxes) == 3
+    for box in boxes:
+        target = re.search(r'aria-labelledby="([^"]+)"', box).group(1)
+        assert f'id="{target}"' in page

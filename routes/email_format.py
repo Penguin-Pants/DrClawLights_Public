@@ -20,6 +20,10 @@ router = APIRouter()
 
 _PLACEHOLDER_TITLES = ["The Midnight Library", "Sapiens"]
 
+# HTMX client event that base.html listens for to reload the preview iframe.
+# More reliable than injecting a <script> via innerHTML.
+_REFRESH_PREVIEW = "refreshPreview"
+
 
 @router.get("/email-format", response_class=HTMLResponse)
 def email_format_page(request: Request, _=Depends(require_auth)):
@@ -61,7 +65,7 @@ async def upload_design(
         logger.error("Could not write design file: %s", e)
         return flash("Could not save the design file on the server.", "error")
 
-    return _flash_with_preview_refresh("Design updated. Preview refreshed.", "success")
+    return flash("Design updated. Preview refreshed.", trigger=_REFRESH_PREVIEW)
 
 
 @router.post("/email-format/toggles", response_class=HTMLResponse)
@@ -75,7 +79,7 @@ def save_toggles(
     config_store.save_settings(
         {"show_echo": show_echo, "show_revisit": show_revisit, "show_covers": show_covers}
     )
-    return _flash_with_preview_refresh("Section toggles saved.", "success")
+    return flash("Section toggles saved.", trigger=_REFRESH_PREVIEW)
 
 
 @router.post("/email-format/subject", response_class=HTMLResponse)
@@ -87,10 +91,12 @@ def save_subject(
     template = subject_template.strip() or DEFAULT_SUBJECT_TEMPLATE
     config_store.save_settings({"subject_template": template})
     preview = escape(_subject_preview(template))
-    return HTMLResponse(
-        f'<div class="flash success" role="status">Subject saved.</div>'
-        f'<div id="subject-preview" hx-swap-oob="true" class="preview-line">'
-        f"Subject preview: <strong>{preview}</strong></div>"
+    return flash(
+        "Subject saved.",
+        extra_html=(
+            f'<div id="subject-preview" hx-swap-oob="true" class="preview-line">'
+            f"Subject preview: <strong>{preview}</strong></div>"
+        ),
     )
 
 
@@ -115,10 +121,3 @@ def _subject_preview(template: str) -> str:
     fake = [{"title": t} for t in _PLACEHOLDER_TITLES]
     return build_subject(fake, template)
 
-
-def _flash_with_preview_refresh(message: str, kind: str) -> HTMLResponse:
-    # Emit an HTMX client event; base.html listens for it and reloads the
-    # preview iframe. More reliable than injecting a <script> via innerHTML.
-    response = HTMLResponse(f'<div class="flash {kind}" role="status">{message}</div>')
-    response.headers["HX-Trigger"] = "refreshPreview"
-    return response
