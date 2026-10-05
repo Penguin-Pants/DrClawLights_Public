@@ -1,6 +1,7 @@
 import argparse
 import logging
 import sys
+import threading
 from datetime import datetime
 
 import resend
@@ -37,6 +38,8 @@ def configure_logging() -> None:
 
 configure_logging()
 logger = logging.getLogger(__name__)
+
+_DIGEST_LOCK = threading.Lock()
 
 
 def _sample_echo(selections: list[dict]) -> dict | None:
@@ -170,6 +173,14 @@ def run_digest(config: dict) -> tuple[bool, str]:
         logger.error("Cannot send digest — not configured: %s", ", ".join(missing))
         return False, f"Not configured: {', '.join(missing)}."
 
+    # One digest at a time in this process: Send Now and the scheduled job
+    # each load history, send, then save it, so overlapping runs would drop
+    # the earlier run's history update.
+    with _DIGEST_LOCK:
+        return _send_digest(config)
+
+
+def _send_digest(config: dict) -> tuple[bool, str]:
     built = build_email(config)
     if built is None:
         return False, "Nothing to send: no highlights file, or no book in it has highlights."

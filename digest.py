@@ -1,8 +1,9 @@
 import json
-import os
 import random
 import logging
 from pathlib import Path
+
+from storage import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +21,10 @@ def save_highlights(raw: bytes, path: str) -> None:
     """Persist an uploaded highlights file to disk.
 
     Keeps the highlights file owned by this module (the dashboard upload route
-    delegates here rather than writing the file itself). Written via a temp
-    file + rename, like config and history, so a concurrent reader never sees
-    a half-written file. Raises OSError on failure for the caller to surface.
+    delegates here rather than writing the file itself). Raises OSError on
+    failure for the caller to surface.
     """
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_bytes(raw)
-    os.replace(tmp, p)
+    atomic_write(path, raw)
 
 
 def validate_highlights(data) -> str | None:
