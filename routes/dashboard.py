@@ -14,10 +14,13 @@ import digest
 import scheduler
 from main import run_digest
 from routes.auth import require_auth
-from routes.common import COMMON_TIMEZONES, flash, templates
+from routes.common import COMMON_TIMEZONES, flash, read_upload, templates
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# A HighlightsGrabber export of a large library is a few MB; this leaves room.
+MAX_HIGHLIGHTS_BYTES = 20 * 1024 * 1024
 
 
 def _format_time(dt: datetime) -> str:
@@ -113,7 +116,9 @@ async def upload_highlights(
     _=Depends(require_auth),
     file: UploadFile = File(...),
 ):
-    raw = await file.read()
+    raw = await read_upload(file, MAX_HIGHLIGHTS_BYTES)
+    if raw is None:
+        return flash("That file is too large (limit 20 MB).", "error")
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError):

@@ -12,13 +12,16 @@ from config import DEFAULT_SUBJECT_TEMPLATE
 from email_builder import build_subject
 from main import build_email
 from routes.auth import require_auth
-from routes.common import flash, templates
+from routes.common import flash, read_upload, templates
 from storage import atomic_write
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _PLACEHOLDER_TITLES = ["The Midnight Library", "Sapiens"]
+
+# The bundled DESIGN.md is under 30 KB.
+MAX_DESIGN_BYTES = 1024 * 1024
 
 # HTMX client event that base.html listens for to reload the preview iframe.
 # More reliable than injecting a <script> via innerHTML.
@@ -51,7 +54,9 @@ async def upload_design(
     _=Depends(require_auth),
     file: UploadFile = File(...),
 ):
-    raw = await file.read()
+    raw = await read_upload(file, MAX_DESIGN_BYTES)
+    if raw is None:
+        return flash("That file is too large (limit 1 MB).", "error")
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
