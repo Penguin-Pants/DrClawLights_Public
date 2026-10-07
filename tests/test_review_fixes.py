@@ -83,7 +83,7 @@ def test_subject_single_book_keeps_hyphen_in_title():
 
 def test_cover_url_is_escaped():
     book = {"title": "T", "author": "A", "coverUrl": 'http://x/a" onerror="y', "highlights": []}
-    html = email_builder._render_book(book)
+    html = email_builder.build_html([book], {})
     assert 'onerror="y' not in html
     assert "&quot;" in html
 
