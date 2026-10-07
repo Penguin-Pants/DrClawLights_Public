@@ -7,10 +7,22 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-_MODEL = "claude-sonnet-4-6"
+# The model the Echo call uses unless ECHO_MODEL overrides it. A retired
+# model returns 404, which find_echo reports as EchoUnavailable so the
+# outcome is visible instead of the Echo quietly disappearing.
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
 
-def find_echo(selected_books: list, api_key: str) -> Optional[dict]:
+class EchoUnavailable(Exception):
+    """The Anthropic API call failed, so today's digest goes out without Echo."""
+
+
+def find_echo(selected_books: list, api_key: str, model: str = DEFAULT_MODEL) -> Optional[dict]:
+    """Ask Claude for the most resonant cross-book pair of highlights.
+
+    Returns None when no usable pair comes back. Raises EchoUnavailable when
+    the API call itself fails (unknown model, auth, rate limit, outage).
+    """
     if len(selected_books) < 2:
         return None
     try:
@@ -44,13 +56,26 @@ def find_echo(selected_books: list, api_key: str) -> Optional[dict]:
         # The SDK default (10 min timeout, 2 retries) could hold Send Now open
         # for ~30 minutes if the API stalls; Echo is optional, so give up early.
         client = anthropic.Anthropic(api_key=api_key, timeout=30.0, max_retries=1)
-        message = client.messages.create(
-            model=_MODEL,
-            max_tokens=256,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        try:
+            message = client.messages.create(
+                model=model,
+                # Room for models that think before answering; only generated
+                # tokens are billed.
+                max_tokens=2048,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except anthropic.NotFoundError as e:
+            raise EchoUnavailable(
+                f"model {model!r} not found (retired?); set ECHO_MODEL to a current model"
+            ) from e
+        except anthropic.APIError as e:
+            raise EchoUnavailable(f"Anthropic API error: {e}") from e
 
-        raw = message.content[0].text
+        if message.stop_reason == "refusal":
+            logger.warning("find_echo: the model declined the request")
+            return None
+        # The first block is a thinking block on models that think by default.
+        raw = next((b.text for b in message.content if b.type == "text"), "")
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if not match:
             logger.warning("find_echo: no JSON object found in response: %r", raw[:200])
@@ -70,6 +95,8 @@ def find_echo(selected_books: list, api_key: str) -> Optional[dict]:
             "explanation": result["explanation"],
         }
 
+    except EchoUnavailable:
+        raise
     except Exception as e:
         logger.warning("find_echo failed: %s", e)
         return None

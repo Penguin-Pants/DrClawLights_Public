@@ -12,6 +12,7 @@
   - `ADMIN_PASSWORD`: the dashboard password (required). The dashboard is on the public internet, so use a long random value. Without it, nobody can log in
   - `RESEND_API_KEY`: your Resend API key (required)
   - `ANTHROPIC_API_KEY`: optional. Enables the "Echo" section (an AI-found connection between highlights from two books)
+  - `ECHO_MODEL`: optional. The Claude model the Echo section uses (default `claude-sonnet-4-6`). If Echo stops working, the dashboard's last-run line says why
 <BR>
 <img width="1122" height="458" alt="image" src="https://github.com/user-attachments/assets/24b62574-7c7c-4747-900f-04c0ef1ed20c" />
 <BR>
